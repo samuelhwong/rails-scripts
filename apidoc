@@ -1,0 +1,122 @@
+#!/usr/bin/python
+#
+# Rails API Documentation Generator (Version 1)
+#
+# This python script looks into the controller files and generates
+# Dokuwiki syntax-compatible text files. A separate text file is created
+# for each controller.
+#
+# Example Ruby code:
+#     # GET /posts
+#     # GET /posts.xml
+#     # Returns 10 most recent blog posts.
+#     # params :page index for pagination
+#     def index
+#       ....
+#     end
+#
+# Copyright (C) 2011 Samuel Wong and Humanity3 Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+import os
+import sys
+import string
+import datetime
+
+outputDir = "doc/api"
+controllerDir = "app/controllers"
+
+# Checks if we are in the root Rails directory.
+if not os.path.exists("Gemfile"):
+    print "ERROR: You must run this script in the root of your Rails app."
+    sys.exit(1)
+
+# Checks if the directory exists. If yes, delete it.
+if os.path.isdir(outputDir):
+    os.system('rm -rf '+outputDir)
+os.makedirs(outputDir)
+
+print "Generating API documentation in doc/api"
+
+# Generate the index page.
+fileIndex = open(outputDir + "/index.txt", "w")
+fileIndex.write("====== API Index ======\n")
+fileIndex.write("This documentation was auto-generated on " + str(datetime.datetime.now()) + "\n")
+for filename in os.listdir(controllerDir):
+    fileIndex.write("  * [[" + string.capitalize(filename[0:len(filename)-14]) + "]]\n")
+fileIndex.close()
+
+# Generate a page for each controller.
+for filename in os.listdir(controllerDir):
+    fileRead = open(controllerDir + "/" + filename, "r")
+    fileWrite = open(outputDir + "/" + filename[0:len(filename)-14] + ".txt", "w")
+    fileWrite.write("====== " + string.capitalize(filename[0:len(filename)-14]) + " ======\n")
+
+    # Reads all the lines of the input file and stores them as a list
+    lines = fileRead.readlines()
+    i = 0 # line counter
+    while i < len(lines):
+        j = 0 # column counter
+        while j < len(lines[i]):
+            if lines[i][j] == " " or lines[i][j] == "\n":
+                # ignore beginning whitespace and linebreaks
+                j = j + 1
+            else:
+                # We're done with this file if we see the word private.
+                if lines[i][j:j+7] == "private":
+                    i = len(lines)
+                    break
+                if lines[i][j] == "#":
+                    # parse comment
+                    j = j + 2
+                    # check if it is a URL
+                    first_time = 1
+                    while lines[i][j:j+3] == "GET" or lines[i][j:j+4] == "POST" or lines[i][j:j+3] == "PUT" or lines[i][j:j+6] == "DELETE":
+                        if first_time == 1:
+                            fileWrite.write("\n===== " + lines[i][j:len(lines[i])-1] + " =====\n")
+                            fileWrite.write("==== URL ====\n")
+                            fileWrite.write("''" + lines[i][j:len(lines[i])-1] + "''\\\\ \n")
+                            first_time = 0
+                        else:
+                            fileWrite.write("''" + lines[i][j:len(lines[i])-1] + "''\\\\ \n")
+                        i = i + 1
+                    fileWrite.write("==== Description ====\n" )
+                    first_param = 1
+                    while lines[i][j-2] == "#":
+                        if lines[i][j:j+6] == "params":
+                            if first_param == 1:
+                                fileWrite.write("==== Parameters ====\n")
+                                first_param = 0
+                                fileWrite.write("  * " + lines[i][j+7:len(lines[i])-1] + "\n")
+                            else:
+                                fileWrite.write("  * " + lines[i][j+7:len(lines[i])-1] + "\n")
+                        else:
+                            fileWrite.write( lines[i][j:len(lines[i])-1] + "\n")
+                        i = i + 1
+                    i = i - 1
+                if lines[i][j:j+3] == "def":
+                    fileWrite.write("==== Rails ==== \n")
+                    fileWrite.write("'':action => " + lines[i][j+4:len(lines[i])-1] + "''\n")
+                
+                j = len(lines[i])
+        i = i + 1
+
+fileRead.close()
+fileWrite.close()
